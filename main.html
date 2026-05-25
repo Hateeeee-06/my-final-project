@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Notebook</title>
+    <link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+
+    <aside class="sidebar">
+        <h2>My Digital Notebook</h2>
+        <ul class="notebook-list" id="notebookList">
+            <li><button class="notebook-btn active" data-notebook="personal">Personal 📝</button></li>
+            <li><button class="notebook-btn" data-notebook="work">Work 💼</button></li>
+            <li><button class="notebook-btn" data-notebook="ideas">Ideas 💡</button></li>
+        </ul>
+    </aside>
+
+    <section class="notes-list-panel">
+        <div class="panel-header">
+            <h3 id="currentNotebookTitle">Personal</h3>
+            <button class="add-note-btn" id="newNoteBtn">+ New</button>
+        </div>
+        <div class="notes-container" id="notesContainer"></div>
+    </section>
+
+    <main class="editor-container">
+        <div class="editor-actions">
+            <div class="editor-header">
+                <input type="text" class="note-title-input" id="noteTitle" value="" placeholder="Note Title">
+            </div>
+            <div class="button-group">
+                <button class="delete-note-btn" id="deleteNoteBtn">Delete Note</button>
+                <button class="manual-save-btn" id="manualSaveBtn">Save Changes</button>
+            </div>
+        </div>
+        <textarea class="note-textarea" id="noteContent" placeholder="Start writing your thoughts here..."></textarea>
+    </main>
+
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-box">
+            <h3>Delete this note?</h3>
+            <p>Are you sure you want to permanently delete this note? This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-cancel" id="modalCancelBtn">Cancel</button>
+                <button class="modal-btn modal-btn-confirm" id="modalConfirmBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uid = localStorage.getItem('uid');
+        if (!uid) {
+        window.location.href = 'draft2.html'; // Or whatever your login filename is
+        }
+        
+        const API_URL = `http://127.0.0.1:5000/api/notes?user_id=${uid}`;      
+
+        let notebookData = { personal: [], work: [], ideas: [] };
+        let currentNotebook = "personal";
+        let activeNoteId = null;
+        let saveTimeout; 
+
+        const notebookList = document.getElementById('notebookList');
+        const notesContainer = document.getElementById('notesContainer');
+        const currentNotebookTitle = document.getElementById('currentNotebookTitle');
+        const noteTitle = document.getElementById('noteTitle');
+        const noteContent = document.getElementById('noteContent');
+        const newNoteBtn = document.getElementById('newNoteBtn');
+        const deleteNoteBtn = document.getElementById('deleteNoteBtn');
+        const manualSaveBtn = document.getElementById('manualSaveBtn');
+        
+        const deleteModal = document.getElementById('deleteModal');
+        const modalCancelBtn = document.getElementById('modalCancelBtn');
+        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+
+        async function fetchNotesFromBackend() {
+            try {
+                const response = await fetch(API_URL);
+                notebookData = await response.json();
+                renderNotesList();
+            } catch (error) {
+                console.error("Error connecting to Python backend:", error);
+                renderNotesList(); 
+            }
+        }
+
+        async function saveNotesToBackend() {
+            try {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(notebookData)
+                });
+            } catch (error) {
+                console.error("Failed to save to Python backend:", error);
+            }
+        }
+
+        function renderNotesList() {
+            notesContainer.innerHTML = ""; 
+            const notes = notebookData[currentNotebook] || [];
+
+            if (notes.length === 0) {
+                activeNoteId = null;
+            } else if (activeNoteId === null) {
+                activeNoteId = notes[0].id;
+            }
+
+            notes.forEach((note) => {
+                const noteItem = document.createElement('div');
+                noteItem.classList.add('note-item');
+                if (note.id === activeNoteId) noteItem.classList.add('active');
+
+                noteItem.dataset.id = note.id;
+                noteItem.innerHTML = `
+                    <h4 class="note-card-title">${note.title || "Untitled Note"}</h4>
+                    <p class="note-card-snippet">${note.content || "No content yet..."}</p>
+                `;
+                notesContainer.appendChild(noteItem);
+            });
+
+            loadActiveNoteIntoEditor();
+        }
+
+        function loadActiveNoteIntoEditor() {
+            const notes = notebookData[currentNotebook] || [];
+            const activeNote = notes.find(n => n.id === activeNoteId);
+            
+            if (activeNote) {
+                noteTitle.value = activeNote.title;
+                noteContent.value = activeNote.content;
+                
+                deleteNoteBtn.style.display = "block";
+                manualSaveBtn.style.display = "block";
+                
+                noteTitle.removeAttribute('disabled');
+                noteContent.removeAttribute('disabled');
+            } else {
+                noteTitle.value = "";
+                noteContent.value = "";
+                
+                deleteNoteBtn.style.display = "none";
+                manualSaveBtn.style.display = "none";
+                
+                noteTitle.setAttribute('disabled', 'true');
+                noteContent.setAttribute('disabled', 'true');
+            }
+        }
+
+        notebookList.addEventListener('click', (e) => {
+            const targetButton = e.target.closest('.notebook-btn');
+            if (!targetButton) return;
+
+            document.querySelectorAll('.notebook-btn').forEach(btn => btn.classList.remove('active'));
+            targetButton.classList.add('active'); 
+
+            currentNotebook = targetButton.dataset.notebook;
+            currentNotebookTitle.innerText = targetButton.innerText.split(' ')[0];
+            
+            activeNoteId = null; 
+            renderNotesList();
+        });
+
+        notesContainer.addEventListener('click', (e) => {
+            const clickedItem = e.target.closest('.note-item');
+            if (!clickedItem) return;
+
+            activeNoteId = parseInt(clickedItem.dataset.id);
+            document.querySelectorAll('.note-item').forEach(item => item.classList.remove('active'));
+            clickedItem.classList.add('active');
+
+            loadActiveNoteIntoEditor();
+        });
+
+        newNoteBtn.addEventListener('click', () => {
+            const newNote = {
+                id: Date.now(),
+                title: "Untitled Note",
+                content: ""
+            };
+
+            if (!notebookData[currentNotebook]) {
+                notebookData[currentNotebook] = [];
+            }
+
+            notebookData[currentNotebook].unshift(newNote);
+            activeNoteId = newNote.id;
+
+            renderNotesList();
+            noteContent.focus();
+            saveNotesToBackend();
+        });
+
+        deleteNoteBtn.addEventListener('click', () => {
+            if (activeNoteId === null) return;
+            deleteModal.classList.add('show');
+        });
+
+        modalCancelBtn.addEventListener('click', () => {
+            deleteModal.classList.remove('show');
+        });
+
+        modalConfirmBtn.addEventListener('click', () => {
+            clearTimeout(saveTimeout);
+            notebookData[currentNotebook] = notebookData[currentNotebook].filter(n => n.id !== activeNoteId);
+            activeNoteId = null;
+            
+            deleteModal.classList.remove('show'); 
+            renderNotesList();
+            saveNotesToBackend(); 
+        });
+
+        manualSaveBtn.addEventListener('click', () => {
+            manualSaveBtn.innerText = "Saving...";
+            manualSaveBtn.style.backgroundColor = "#ffa502";
+            
+            saveNotesToBackend().then(() => {
+                setTimeout(() => {
+                    manualSaveBtn.innerText = "Saved! ✓";
+                    manualSaveBtn.style.backgroundColor = "#2ed573";
+                }, 400);
+            });
+        });
+
+        function triggerAutoSave() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(saveNotesToBackend, 800); 
+        }
+
+        noteTitle.addEventListener('input', () => {
+            const notes = notebookData[currentNotebook];
+            const activeNote = notes.find(n => n.id === activeNoteId);
+            if (activeNote) {
+                activeNote.title = noteTitle.value;
+                const activeCardTitle = document.querySelector(`.note-item.active .note-card-title`);
+                if (activeCardTitle) {
+                    activeCardTitle.innerText = noteTitle.value || "Untitled Note";
+                }
+                triggerAutoSave();
+            }
+        });
+
+        noteContent.addEventListener('input', () => {
+            const notes = notebookData[currentNotebook];
+            const activeNote = notes.find(n => n.id === activeNoteId);
+            if (activeNote) {
+                activeNote.content = noteContent.value;
+                const activeCardSnippet = document.querySelector(`.note-item.active .note-card-snippet`);
+                if (activeCardSnippet) {
+                    activeCardSnippet.innerText = noteContent.value || "No content yet...";
+                }
+                triggerAutoSave();
+            }
+        });
+
+        fetchNotesFromBackend();
+    </script>
+</body>
+</html>

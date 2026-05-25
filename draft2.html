@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Login & Signup</title>
+<style>
+  body { 
+    font-family: Arial, sans-serif;
+    background: url("PGPCCC.jpg") no-repeat center center fixed;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+
+  .container {
+    /* Blue-tinted glass effect */
+    background: rgba(2, 48, 71, 0.6);
+    backdrop-filter: blur(12px);
+    padding: 40px 35px;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+    width: 360px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.2);
+    position: relative;
+  }
+
+  h2 {
+    margin-bottom: 20px;
+    color: #ffffff; /* White text for better blue contrast */
+  }
+
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 16px;
+  }
+
+  .password-wrapper { position: relative; width: 100%; }
+  .password-wrapper input { padding-right: 40px; }
+
+  .eye-icon {
+    position: absolute; right: 12px; top: 50%;
+    transform: translateY(-50%); cursor: pointer;
+    font-size: 20px; opacity: 0.7; color: #333;
+  }
+
+  button {
+    width: 100%; padding: 12px; margin-top: 10px;
+    border: none; border-radius: 6px; font-size: 16px;
+    cursor: pointer; transition: 0.3s;
+  }
+
+  /* Blue-themed button */
+  #submitBtn {
+    background-color: #0284f6; 
+    color: white;
+  }
+  #submitBtn:hover {
+    background-color: #00c3f4;
+  }
+
+  /* Blue-themed switch text */
+  .switch {
+    margin-top: 15px; font-size: 14px; cursor: pointer;
+    color: #bde0fe; 
+    transition: 0.3s;
+  }
+  .switch:hover {
+    color: white;
+    text-decoration: underline;
+  }
+
+  #message {
+    min-height: 22px; margin-top: 12px; 
+    font-weight: bold; font-size: 15px; color: #ffeb3b;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h2 id="formTitle">Login</h2>
+
+  <input type="text" id="username" placeholder="Username" autocomplete="off" />
+  
+  <div class="password-wrapper">
+    <input type="password" id="password" placeholder="Password" autocomplete="off" />
+    <span class="eye-icon" id="toggleEye">👁️</span>
+  </div>
+
+  <button id="submitBtn">Login</button>
+
+  <div class="switch" id="switchForm">Don’t have an account? Create one</div>
+
+  <div id="message"></div>
+</div>
+
+<script>
+    let isSignup = false;
+    let passwordVisible = false;
+    const API = "http://127.0.0.1:5000"; // Your Flask URL
+
+    // ... (Keep your existing variable declarations for elements) ...
+    const formTitle = document.getElementById('formTitle');
+    const submitBtn = document.getElementById('submitBtn');
+    const switchForm = document.getElementById('switchForm');
+    const message = document.getElementById('message');
+    const toggleEye = document.getElementById('toggleEye');
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+
+    toggleEye.addEventListener('click', () => {
+        passwordVisible = !passwordVisible;
+        passwordInput.type = passwordVisible ? 'text' : 'password';
+        toggleEye.textContent = passwordVisible ? '🙈' : '👁️';
+    });
+
+    switchForm.addEventListener('click', () => {
+        isSignup = !isSignup;
+        formTitle.textContent = isSignup ? 'Create Account' : 'Login';
+        submitBtn.textContent = isSignup ? 'Create Account' : 'Login';
+        switchForm.textContent = isSignup ? 'Already have an account? Login here' : 'Don’t have an account? Create one';
+        message.textContent = '';
+    });
+
+    submitBtn.addEventListener('click', async () => {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!username || !password) {
+            message.style.color = 'red';
+            message.textContent = 'Please fill in all fields.';
+            return;
+        }
+
+        const endpoint = isSignup ? '/register' : '/login';
+        
+        try {
+            const response = await fetch(`${API}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                message.style.color = 'green';
+                message.textContent = data.message;
+                
+                if (!isSignup) {
+                    // Save user ID to link notes later
+                    localStorage.setItem('uid', data.user_id);
+                    message.textContent = 'Login successful! Redirecting...';
+                    setTimeout(() => window.location.href = 'main.html', 1000);
+                } else {
+                    setTimeout(() => switchForm.click(), 1500);
+                }
+            } else {
+                message.style.color = 'red';
+                message.textContent = data.message;
+            }
+        } catch (err) {
+            message.style.color = 'red';
+            message.textContent = "Server connection failed.";
+        }
+    });
+</script>
+
+</body>
+</html>
